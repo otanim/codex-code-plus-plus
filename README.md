@@ -58,24 +58,6 @@ Adds a **“Code++”** button to Codex task pages on ChatGPT, letting you stack
 
 Tweak them near the top of the script if needed.
 
-## 📦 Repository layout
-
-```text
-└── /                   # root
-    ├── code-plus-plus.user.js  # the userscript
-    ├── README.md              # you are here
-    └── .editorconfig / .eslintrc / etc. (optional)
-```
-
-## 🚀 Roadmap
-
-- ✅ Initial queue, resize, reorder, auto-run.
-- [ ] Keyboard shortcuts (e.g. ⌘ + Enter to queue).
-- [ ] Export / import queue (JSON / clipboard).
-- [ ] Dark/light theme detection.
-
-PRs welcome!
-
 ## 🤝 Contributing
 
 1. Fork the repo.
