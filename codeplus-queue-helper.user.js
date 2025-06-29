@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Codex task – Code++ queue helper
 // @namespace    https://chatgpt.com/
-// @version      0.1.0
+// @version      0.1.24
 // @description  Adds a “Code++” button to Codex task pages, storing each prompt in a persistent queue and displaying them as numbered toasts (375 px min‑width) that you can drag‑resize, reorder (up/down) or delete. Inline SVG icons keep it CSP‑safe, and the queue auto‑executes tasks while marking toasts as processing or done.
 // @match        https://chatgpt.com/codex/tasks/task*
 // @grant        none
@@ -18,11 +18,24 @@
     const PAGE_KEY   = LS_PREFIX + location.pathname;
     const MIN_WIDTH  = 375; // enforce minimum width
 
-    console.log('[code-plus-plus] v0.1.0');
+    console.log('[code-plus-plus] v0.1.24');
 
     /*************** queue helpers ***************/
-    const getQ  = () => JSON.parse(localStorage.getItem(PAGE_KEY) || '[]');
-    const saveQ = q  => localStorage.setItem(PAGE_KEY, JSON.stringify(q));
+    let queue = JSON.parse(localStorage.getItem(PAGE_KEY) || '[]');
+    // sanitize any legacy or malformed entries
+    if (queue.some(q => typeof q !== 'string')) {
+        queue = queue.flatMap(q => {
+            if (typeof q === 'string') return [q];
+            if (q && typeof q.text === 'string') return [q.text];
+            return [];
+        });
+        localStorage.setItem(PAGE_KEY, JSON.stringify(queue));
+    }
+    const getQ  = () => queue;
+    const saveQ = () => localStorage.setItem(PAGE_KEY, JSON.stringify(queue));
+
+    let queueProcessingStarted = false;
+
 
     /*************** inline SVG icons ***************/
     const upSvg = '<svg aria-hidden="true" class="svg-up" viewBox="0 0 448 512" fill="currentColor"><path d="M224 128L96 256h256L224 128z"/></svg>';
@@ -62,6 +75,15 @@
 .code-plus-plus-toast.done {
   opacity: 0.6;
   text-decoration: line-through;
+}
+.code-plus-plus-toast.done .svg-up,
+.code-plus-plus-toast.done .svg-down {
+  display: none;
+}
+.code-plus-plus-toast.processing .svg-up,
+.code-plus-plus-toast.processing .svg-down,
+.code-plus-plus-toast.processing .svg-trash {
+  display: none;
 }
 .toast-badge {
   display: inline-block;
@@ -136,14 +158,19 @@
     }
 
     /*************** render toasts ***************/
-    function renderToasts() {
+    function renderToasts(preserveDone = false) {
         const container = ensureToastContainer();
-        container.innerHTML = '';
-        getQ().forEach((item, idx) => createToast(item, idx));
+        if (preserveDone) {
+            container.querySelectorAll('.code-plus-plus-toast:not(.done):not(.processing)').forEach(el => el.remove());
+        } else {
+            container.innerHTML = '';
+        }
+        const offset = container.querySelectorAll('.code-plus-plus-toast.done, .code-plus-plus-toast.processing').length;
+        getQ().forEach((item, idx) => createToast(item, idx, offset));
     }
 
     /*************** create single toast ***************/
-    function createToast(item, idx) {
+    function createToast(item, idx, offset = 0) {
         const container = ensureToastContainer();
         const t = document.createElement('div');
         t.className = 'code-plus-plus-toast';
@@ -178,7 +205,7 @@
         textEl.className = 'toast-text';
         const badge = document.createElement('span');
         badge.className = 'toast-badge';
-        badge.textContent = idx + 1;
+        badge.textContent = idx + offset + 1;
         const content = document.createElement('span');
         content.textContent = item;
         textEl.append(badge, content);
@@ -195,8 +222,8 @@
             upBtn.addEventListener('click', () => {
                 const q = getQ();
                 [q[idx-1], q[idx]] = [q[idx], q[idx-1]];
-                saveQ(q);
-                renderToasts();
+                saveQ();
+                renderToasts(true);
             });
             actions.append(upBtn);
         }
@@ -210,8 +237,8 @@
             downBtn.addEventListener('click', () => {
                 const q = getQ();
                 [q[idx], q[idx+1]] = [q[idx+1], q[idx]];
-                saveQ(q);
-                renderToasts();
+                saveQ();
+                renderToasts(true);
             });
             actions.append(downBtn);
         }
@@ -223,8 +250,9 @@
         trashBtn.addEventListener('click', () => {
             const q = getQ();
             q.splice(idx, 1);
-            saveQ(q);
-            renderToasts();
+            saveQ();
+            t.remove();
+            renderToasts(true);
         });
         actions.append(trashBtn);
 
@@ -234,7 +262,14 @@
 
     function markNextToastProcessing() {
         const toast = document.querySelector('#code-plus-plus-toast-container .code-plus-plus-toast:not(.done):not(.processing)');
-        if (toast) toast.classList.add('processing');
+        if (toast) {
+            toast.classList.add('processing');
+            const next = toast.nextElementSibling;
+            if (next && next.classList.contains('code-plus-plus-toast')) {
+                const up = next.querySelector('.svg-up');
+                if (up) up.closest('span')?.remove();
+            }
+        }
     }
 
     function markNextToastCompleted() {
@@ -244,7 +279,6 @@
             toast.classList.add('done');
         }
     }
-
     /*************** Code++ button ***************/
     function buildBtn() {
         const btn = document.createElement('button');
@@ -253,36 +287,17 @@
         btn.textContent = 'Code++';
         btn.addEventListener('click', ev => {
             ev.stopPropagation();
+            const placeholder = document.querySelector('.placeholder');
+            if (placeholder) simulateClick(placeholder);
+
             const ed = document.querySelector(EDITOR_SEL);
             const text = ed ? (ed.innerText.trim() || '(empty)') : '(empty)';
             const q = getQ();
             q.push(text);
-            saveQ(q);
-            renderToasts();
+            saveQ();
+            renderToasts(true);
 
-            const placeholder = document.querySelector('.placeholder');
-            if (placeholder) simulateClick(placeholder);
-
-            if (ed) {
-                const textarea = ed;
-                const fire = (type, key, opts = {}) => {
-                    const code = key === 'Delete' ? 46 : key.toUpperCase().charCodeAt(0);
-                    textarea.dispatchEvent(new KeyboardEvent(type, {
-                        key,
-                        keyCode: code,
-                        which: code,
-                        bubbles: true,
-                        cancelable: true,
-                        ...opts
-                    }));
-                };
-                fire('keydown', 'a', { ctrlKey: true });
-                fire('keyup', 'a', { ctrlKey: true });
-                fire('keydown', 'Delete');
-                textarea.innerText = '';
-                textarea.dispatchEvent(new InputEvent('input', { bubbles: true }));
-                fire('keyup', 'Delete');
-            }
+            if (ed) clearEditorWithKeys(ed);
         });
         return btn;
     }
@@ -291,7 +306,6 @@
     function attachIfNeeded(stopBtn) {
         const row = stopBtn.parentElement;
         if (!row || row.querySelector(`.${CODE_CLASS}`)) return;
-        if (!row.closest('.contents, .apper')) return;
         row.appendChild(buildBtn());
     }
 
@@ -338,14 +352,34 @@
         });
     }
 
+    function clearEditorWithKeys(el) {
+        el.focus();
+        const fire = (type, key, extra = {}) => {
+            const code = key.length === 1 ? key.charCodeAt(0) : undefined;
+            el.dispatchEvent(new KeyboardEvent(type, {
+                key,
+                code: key.length === 1 ? `Key${key.toUpperCase()}` : key,
+                keyCode: code,
+                which: code,
+                bubbles: true,
+                cancelable: true,
+                ...extra
+            }));
+        };
+        fire('keydown', 'a', { ctrlKey: true });
+        fire('keyup', 'a', { ctrlKey: true });
+        fire('keydown', 'Delete');
+        fire('keyup', 'Delete');
+        el.innerText = '';
+        el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    }
+
     /*************** helper: simulate typing ***************/
     function simulateTyping(el, text) {
         ['mousedown', 'mouseup', 'click'].forEach(t =>
             el.dispatchEvent(new MouseEvent(t, { bubbles: true }))
         );
-        el.focus();
-        el.innerText = '';
-        el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+        clearEditorWithKeys(el);
         const fireKey = (type, ch) => {
             const code = ch.charCodeAt(0);
             el.dispatchEvent(new KeyboardEvent(type, {
@@ -393,39 +427,73 @@
         });
     }
 
-    /*************** helpers: Code++ button detection ***************/
-    function queryCodePlus() {
-        return [...document.querySelectorAll('button,div')]
-            .find(el => el.textContent.trim() === 'Code++' &&
-                !el.classList.contains(CODE_CLASS));
+    /*************** PR action detection ***************/
+    function findPrAction() {
+        return [...document.querySelectorAll('.truncate')]
+            .find(el => /(Update branch|Create PR|View PR)/.test(el.textContent));
     }
 
-    function waitForCodePlusVisible(timeout = DEFAULT_TIMEOUT) {
+    function waitForPrAction(timeout = DEFAULT_TIMEOUT) {
         return new Promise(resolve => {
             const start = Date.now();
             (function check() {
-                const el = queryCodePlus();
-                if (el && el.offsetParent !== null) return resolve(el);
+                const btn = findPrAction();
+                if (btn) return resolve(btn);
                 if (Date.now() - start >= timeout) return resolve(null);
                 requestAnimationFrame(check);
             })();
         });
     }
 
-    function waitForCodePlusGone(timeout = DEFAULT_TIMEOUT) {
+    function waitForPrActionGone(timeout = DEFAULT_TIMEOUT) {
         return new Promise(resolve => {
             const start = Date.now();
             (function check() {
-                const el = queryCodePlus();
-                if (!el || el.offsetParent === null) return resolve(true);
+                const btn = findPrAction();
+                if (!btn || btn.offsetParent === null) return resolve(true);
                 if (Date.now() - start >= timeout) return resolve(false);
                 requestAnimationFrame(check);
             })();
         });
     }
 
+    function watchPrAction() {
+        setInterval(() => {
+            if (queueProcessingStarted) return;
+            if (!getQ().length) return;
+            const btn = findPrAction();
+            if (btn) {
+                console.log('[code-plus-plus] PR action found, starting queue');
+                handleQueueOnLoad();
+            }
+        }, 1000);
+    }
+
+    function toggleUi(visible) {
+        const container = document.getElementById('code-plus-plus-toast-container');
+        if (container) container.style.display = visible ? '' : 'none';
+        document.querySelectorAll(`.${CODE_CLASS}`).forEach(btn => {
+            btn.style.display = visible ? '' : 'none';
+        });
+        if (visible) renderToasts(true);
+    }
+
+    function watchUrlChange() {
+        let last = location.href;
+        setInterval(() => {
+            const href = location.href;
+            if (href !== last) {
+                last = href;
+                const onTask = location.pathname.startsWith('/codex/tasks/task');
+                toggleUi(onTask);
+            }
+        }, 1000);
+    }
+
     /*************** queued task opener ***************/
     async function handleQueueOnLoad() {
+        if (queueProcessingStarted) return;
+        queueProcessingStarted = true;
         console.log('[code-plus-plus] handleQueueOnLoad start');
         const contentsSel = '.contents';
         const actionsSel = '[data-testid="composer-footer-actions"]';
@@ -433,8 +501,18 @@
         const composerBtnSel = '.composer-btn';
 
         let queue = getQ();
-        if (!queue.length) return;
+        if (!queue.length) {
+            queueProcessingStarted = false;
+            return;
+        }
         console.log(`[code-plus-plus] tasks queued: ${queue.length}`);
+
+        const prBtnInitial = await waitForPrAction(DEFAULT_TIMEOUT);
+        if (!prBtnInitial) {
+            console.log('[code-plus-plus] PR action not found, aborting');
+            queueProcessingStarted = false;
+            return;
+        }
 
         await waitForElement(contentsSel, DEFAULT_TIMEOUT);
 
@@ -453,19 +531,33 @@
             actions = await waitForVisible(actionsSel, DEFAULT_TIMEOUT);
         }
         console.log(`[code-plus-plus] actions visible: ${!!actions}`);
-        if (!actions) return;
+        if (!actions) {
+            queueProcessingStarted = false;
+            return;
+        }
 
         const composerBtn = await waitForVisible(composerBtnSel, DEFAULT_TIMEOUT);
         console.log(`[code-plus-plus] ${composerBtn ? 'fresh' : 'non fresh'}`);
 
         while ((queue = getQ()).length) {
-            markNextToastProcessing();
-            const task = queue.shift();
+            const item = queue[0];
             const textarea = await waitForElement(EDITOR_SEL, DEFAULT_TIMEOUT);
             if (!textarea) break;
+            let prBtn = findPrAction();
+            if (!prBtn) {
+                console.log('[code-plus-plus] waiting for PR action before typing');
+                prBtn = await waitForPrAction(DEFAULT_TIMEOUT);
+                if (!prBtn) {
+                    console.log('[code-plus-plus] PR action missing, stopping');
+                    break;
+                }
+            }
+            markNextToastProcessing();
             console.log('[code-plus-plus] typing queued task');
-            simulateTyping(textarea, task);
-            saveQ(queue);
+            simulateTyping(textarea, item);
+            queue.shift();
+            saveQ();
+            renderToasts(true);
 
             const codeBtn = await waitForCodeButton(CODE_TIMEOUT);
             if (!codeBtn) break;
@@ -473,24 +565,20 @@
             simulateClick(codeBtn);
             console.log('[code-plus-plus] Code button clicked');
 
-            console.log('[code-plus-plus] waiting for Code++ to appear');
-            const codePlus = await waitForCodePlusVisible(DEFAULT_TIMEOUT);
-            console.log(`[code-plus-plus] Code++ appeared: ${!!codePlus}`);
-            if (codePlus) {
-                const gone = await waitForCodePlusGone(CODE_TIMEOUT);
-                console.log(`[code-plus-plus] Code++ gone: ${gone}`);
-            }
+            console.log('[code-plus-plus] waiting for PR action to disappear');
+            await waitForPrActionGone(DEFAULT_TIMEOUT);
+            console.log('[code-plus-plus] waiting for PR action to return');
+            const back = await waitForPrAction(CODE_TIMEOUT);
+            console.log(`[code-plus-plus] PR action returned: ${!!back}`);
 
             markNextToastCompleted();
             queue = getQ();
-            if (queue[0] === task) {
-                queue.shift();
-                saveQ(queue);
-            }
             await new Promise(r => setTimeout(r, 500));
+            renderToasts(true);
         }
 
         console.log('[code-plus-plus] queue processing done');
+        queueProcessingStarted = false;
     }
 
     // Initial hook and observer
@@ -508,12 +596,16 @@
     // Initial render
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
-            renderToasts();
+            renderToasts(true);
             handleQueueOnLoad();
+            watchPrAction();
+            watchUrlChange();
         });
     } else {
-        renderToasts();
+        renderToasts(true);
         handleQueueOnLoad();
+        watchPrAction();
+        watchUrlChange();
     }
 
 })();

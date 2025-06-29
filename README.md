@@ -27,7 +27,8 @@ Adds a **“Code++”** button to Codex task pages on ChatGPT, letting you stack
 ![img_7.png](img_7.png)
 
 ### Queue list:
-![img_1.png](img_1.png)
+![img_3.png](img_3.png)
+
 
 ## ⚡ Quick Install
 
