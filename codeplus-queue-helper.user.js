@@ -2,6 +2,7 @@
 // @name         Codex task – Code++ queue helper
 // @namespace    https://chatgpt.com/
 // @version      0.1.24
+// @author       Arman Yeghiazaryan - @otanim
 // @description  Adds a “Code++” button to Codex task pages, storing each prompt in a persistent queue and displaying them as numbered toasts (375 px min‑width) that you can drag‑resize, reorder (up/down) or delete. Inline SVG icons keep it CSP‑safe, and the queue auto‑executes tasks while marking toasts as processing or done.
 // @match        https://chatgpt.com/codex/tasks/task*
 // @grant        none
