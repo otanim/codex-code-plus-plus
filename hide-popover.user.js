@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Hide Popover via CSS
 // @namespace    http://tampermonkey.net/
-// @version      0.1.2
+// @version      0.1.3
 // @author       Arman Yeghiazaryan - @otanim
-// @description  Hide the "Ctrl" popover by targeting body's last or pre-last div
+// @description  Hide the "Ctrl" popover by targeting the body's last or pre-last div element
 // @match        https://chatgpt.com/*
 // @run-at       document-start
 // @grant        none
@@ -13,11 +13,11 @@
     'use strict';
 
     // inject a CSS rule so that the popover shown when holding Ctrl
-    // is hidden whether it's the last or second to last <div>
+    // is hidden whether it's the last <div> or the second to last element if that element is a <div>
     const style = document.createElement('style');
     style.textContent = `
-        body > div:nth-last-of-type(1).popover.select-none,
-        body > div:nth-last-of-type(2).popover.select-none {
+        body > div.popover.select-none:last-child,
+        body > div.popover.select-none:nth-last-child(2) {
             display: none !important;
         }
     `;
