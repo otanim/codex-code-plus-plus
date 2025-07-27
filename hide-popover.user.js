@@ -20,5 +20,4 @@
         }
     `;
     document.head.appendChild(style);
-    console.log(style);
 })();
