@@ -2,6 +2,8 @@
 
 A userscript for ChatGPT Codex tasks that lets you queue prompts and run them sequentially. Clicking the injected **Code++** button stores the current prompt in a persistent list displayed as draggable toast cards. Items can be reordered, removed and will automatically execute one after another.
 
+This repo also includes a tiny helper script, **Hide Popover via CSS**, that removes the new "UI tip" popover OpenAI shows when you hold either <kbd>Ctrl</kbd> key. The tip is distracting while typing, so the script injects CSS that hides it before the page fully loads.
+
 |                   |                                                      |
 |-------------------|------------------------------------------------------|
 | **Userscript name** | `Codex task – Code++ queue helper` |
@@ -34,8 +36,9 @@ A userscript for ChatGPT Codex tasks that lets you queue prompts and run them se
 1. Install a userscript manager:
    - Chrome/Edge/Brave: [Tampermonkey](https://www.tampermonkey.net/)
    - Firefox: [Violentmonkey](https://violentmonkey.github.io/) or Tampermonkey
-2. Open [`codeplus-queue-helper.user.js`](./codeplus-queue-helper.user.js) and click **Raw** to install.
-3. Visit a Codex task page. A new **Code++** button appears next to the stop button.
+2. Open [`codeplus-queue-helper.user.js`](./codeplus-queue-helper.user.js) and click **Raw** to install the queue helper.
+3. Open [`hide-popover.user.js`](./hide-popover.user.js) and click **Raw** if you want to disable the new Ctrl popover.
+4. Visit a Codex task page. A new **Code++** button appears next to the stop button.
 
 ## Usage
 
