@@ -2,6 +2,7 @@
 // @name         Hide Popover via CSS
 // @namespace    http://tampermonkey.net/
 // @version      0.1
+// @author       Arman Yeghiazaryan - @otanim
 // @description  Hide the script‑adjacent .popover.select-none by injecting CSS
 // @match        https://chatgpt.com/*
 // @run-at       document-start
